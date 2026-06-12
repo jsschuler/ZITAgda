@@ -38,11 +38,14 @@ module L0AgentStrategy where
 
 open import Data.Nat      using (ℕ; suc; zero; s≤s; z≤n) renaming (_<_ to _<ℕ_; _≤_ to _≤ℕ_)
 open import Data.Fin      using (Fin) renaming (zero to fzero; suc to fsuc)
-open import Data.Rational using (ℚ; _*_; _-_; _≤_; _<_; 0ℚ; _/_; _⊓_; -_)
+open import Data.Rational using (ℚ; _+_; _*_; _-_; _≤_; _<_; 0ℚ; 1ℚ; _/_; _⊓_; -_; NonNegative; nonNegative)
 open import Data.Rational.Properties
-  using (_≤?_; _<?_; ≤-refl; ≤-trans; ≤-reflexive; +-identityʳ; +-inverseʳ; +-monoˡ-≤)
-open import Relation.Binary.PropositionalEquality using (subst)
-open import Data.Integer  using (+_)
+  using (_≤?_; _<?_; ≤-refl; ≤-trans; ≤-reflexive
+       ; +-identityʳ; +-inverseʳ; +-assoc; +-comm; +-monoˡ-≤
+       ; *-identityʳ; *-distribʳ-+; *-monoˡ-≤-nonNeg; *-monoʳ-≤-nonNeg)
+open import Relation.Binary.PropositionalEquality using (_≡_; subst; sym; trans; cong)
+open import Surplus using (p≤q⇒0≤q-p)
+open import Data.Integer  using () renaming (+_ to ℤ+_)
 open import Data.List     using (List; []; _∷_)
 open import Data.Maybe    using (Maybe; just; nothing)
 open import Data.Product  using (Σ; _,_)
@@ -54,10 +57,11 @@ open import Data.Unit using (tt)
 open import Agent
 open import Proposal
 open import Seed          using (Seed; drawAt)
-open import PriceGrid     using (ratio)
+open import PriceGrid     using (ratio; buyerTick; sellerTick; ratioLeOne; ratioNonNeg)
 open import Flagship      using (RawMatch; rawSurplus; buyerWitness; sellerWitness)
 open import SimulationModel using (SimFnL0; l0RealizedSurplus)
-open import FlagshipFull  using (SimEnvironment)
+open import Trace         using (realizedSurplus)
+open import FlagshipFull  using (SimEnvironment; concreteSim)
 
 
 -- ── L0 Price Tick ─────────────────────────────────────────────────────────────
@@ -177,10 +181,10 @@ concreteL0Sim env = λ s → runL0Matches env s
 
 private
   2ℚ : ℚ
-  2ℚ = (+ 2) / 1
+  2ℚ = (ℤ+ 2) / 1
 
   3ℚ : ℚ
-  3ℚ = (+ 3) / 1
+  3ℚ = (ℤ+ 3) / 1
 
 
 -- ── Witness Environment ───────────────────────────────────────────────────────
@@ -344,3 +348,151 @@ l0Nonpos-inverted {n} env s h
   where
     vB = ValuationSchedule.unitValue (Agent.valuation (SimEnvironment.buyer  env))
     vS = ValuationSchedule.unitValue (Agent.valuation (SimEnvironment.seller env))
+
+
+-- ── L0 Surplus Non-Negative in Productive Markets ────────────────────────────
+--
+-- THEOREM (l0Nonneg-productive).
+-- In any environment where v_seller ≤ v_buyer, the L0 realized surplus is ≥ 0
+-- at every seed.  This is the symmetric counterpart of l0Nonpos-inverted.
+--
+-- PROOF.
+-- Case nothing: no trade, surplus = 0 ≥ 0. ✓
+-- Case just m:  trade occurs.  rawSurplus m = vB - vS ≥ 0 by hypothesis.
+--   l0RealizedSurplus [m] = (vB - vS) + 0ℚ ≥ 0ℚ. ✓
+
+l0Nonneg-productive
+  : ∀ {n} (env : SimEnvironment) (s : Seed (suc n) 2)
+  → ValuationSchedule.unitValue (Agent.valuation (SimEnvironment.seller env))
+    ≤ ValuationSchedule.unitValue (Agent.valuation (SimEnvironment.buyer env))
+  → 0ℚ ≤ l0RealizedSurplus (concreteL0Sim {n} env s)
+l0Nonneg-productive {n} env s h
+  with askP ≤? bidP
+  where
+    open SimEnvironment env
+    bidP = l0Tick n maxP (drawAt s fzero)
+    askP = l0Tick n maxP (drawAt s (fsuc fzero))
+... | no  _  = ≤-refl
+... | yes _  =
+  subst (0ℚ ≤_) (sym (+-identityʳ (vB - vS))) (p≤q⇒0≤q-p h)
+  where
+    vB = ValuationSchedule.unitValue (Agent.valuation (SimEnvironment.buyer  env))
+    vS = ValuationSchedule.unitValue (Agent.valuation (SimEnvironment.seller env))
+
+
+-- ── Arithmetic Helpers for Productive-Market FSD ─────────────────────────────
+--
+-- These lemmas establish that the L0 price range is wider than the L3 range:
+--   L0 ask ≤ L3 ask : maxP * r ≤ vS + (maxP - vS) * r  [when 0 ≤ vS]
+--   L3 bid ≤ L0 bid : cap * r ≤ maxP * r               [when cap ≤ maxP]
+-- Together they imply: if L3 agents cross (l3Ask ≤ l3Bid), then L0 agents
+-- also cross (l0Ask ≤ l0Bid) — the L3 constraint is strictly tighter.
+
+private
+
+  -- ring identity: vS + (maxP - vS) = maxP
+  -- Proof: vS + (maxP + (-vS)) = (maxP + vS) + (-vS) = maxP + (vS + (-vS)) = maxP + 0 = maxP
+  sum-cancel : ∀ (vS maxP : ℚ) → (vS + (maxP - vS)) ≡ maxP
+  sum-cancel vS maxP =
+    trans (sym (+-assoc vS maxP (- vS)))
+    (trans (cong (_+ (- vS)) (+-comm vS maxP))
+    (trans (+-assoc maxP vS (- vS))
+    (trans (cong (maxP +_) (+-inverseʳ vS))
+           (+-identityʳ maxP))))
+
+  -- L0 ask ≤ L3 ask: maxP * r ≤ vS + (maxP - vS) * r
+  -- Proof: maxP * r = vS * r + (maxP - vS) * r ≤ vS + (maxP - vS) * r
+  --        (using vS * r ≤ vS from 0 ≤ vS and r ≤ 1)
+  l0AskLE-l3Ask
+    : ∀ (vS maxP r : ℚ)
+    → 0ℚ ≤ vS
+    → r ≤ 1ℚ
+    → maxP * r ≤ vS + (maxP - vS) * r
+  l0AskLE-l3Ask vS maxP r h0vS hr1 =
+    subst (_≤ vS + (maxP - vS) * r) (sym maxP*r-eq)
+          (+-monoˡ-≤ ((maxP - vS) * r) vS*r≤vS)
+    where
+      distrib : ((vS + (maxP - vS)) * r) ≡ (vS * r + (maxP - vS) * r)
+      distrib = *-distribʳ-+ r vS (maxP - vS)
+      maxP*r-eq : maxP * r ≡ (vS * r + (maxP - vS) * r)
+      maxP*r-eq = trans (cong (_* r) (sym (sum-cancel vS maxP))) distrib
+      instance vS-nn : NonNegative vS
+               vS-nn = nonNegative h0vS
+      vS*r≤vS : vS * r ≤ vS
+      vS*r≤vS = subst (vS * r ≤_) (*-identityʳ vS) (*-monoˡ-≤-nonNeg vS hr1)
+
+  -- L3 bid ≤ L0 bid: cap * r ≤ maxP * r
+  -- Proof: monotonicity of right-multiplication by r ≥ 0, applied to cap ≤ maxP
+  l3BidLE-l0Bid
+    : ∀ (cap maxP r : ℚ)
+    → 0ℚ ≤ r
+    → cap ≤ maxP
+    → cap * r ≤ maxP * r
+  l3BidLE-l0Bid cap maxP r h0r hCap =
+    *-monoʳ-≤-nonNeg r hCap
+    where instance _ = nonNegative h0r
+
+
+-- ── Pointwise L3 ≤ L0 in Productive Markets ──────────────────────────────────
+--
+-- THEOREM (l3LE-l0-productive).
+-- In any environment with v_s ≤ v_b (productive market), under the additional
+-- conditions 0 ≤ v_s and cap ≤ maxP, the L3 surplus is pointwise ≤ L0 surplus.
+--
+-- PROOF by case split on whether L3 trades:
+--
+-- Case L3 no trade:  realizedSurplus = 0 ≤ l0RealizedSurplus  (by l0Nonneg-productive)
+--
+-- Case L3 trades (l3Ask ≤ l3Bid):
+--   Arithmetic chain: l0Ask ≤ l3Ask ≤ l3Bid ≤ l0Bid → L0 also trades.
+--   Case L0 no trade: impossible (contradicts the arithmetic chain). ⊥-elim.
+--   Case L0 trades:   both surpluses = vB - vS, so ≤-refl.
+--
+-- HYPOTHESES:
+--   hVS  : 0 ≤ v_s          (non-negative seller valuation; standard economic assumption)
+--   hProd: v_s ≤ v_b         (productive market)
+--   hCap : cap ≤ maxP        (buyer's effective cap within market range)
+
+open import Data.Empty using (⊥-elim)
+
+l3LE-l0-productive
+  : ∀ {n} (env : SimEnvironment) (s : Seed (suc n) 2)
+  → (hVS  : 0ℚ ≤ ValuationSchedule.unitValue (Agent.valuation (SimEnvironment.seller env)))
+  → (hProd : ValuationSchedule.unitValue (Agent.valuation (SimEnvironment.seller env))
+             ≤ ValuationSchedule.unitValue (Agent.valuation (SimEnvironment.buyer env)))
+  → (hCap :   ValuationSchedule.unitValue (Agent.valuation (SimEnvironment.buyer env))
+            ⊓ Agent.budget (SimEnvironment.buyer env)
+            ≤ SimEnvironment.maxP env)
+  → realizedSurplus (concreteSim {n} env s)
+    ≤ l0RealizedSurplus (concreteL0Sim {n} env s)
+l3LE-l0-productive {n} env s hVS hProd hCap
+  with l3AskP ≤? l3BidP
+  where
+    open SimEnvironment env
+    i_b    = drawAt s fzero
+    i_s    = drawAt s (fsuc fzero)
+    l3BidP = buyerTick n (ValuationSchedule.unitValue (Agent.valuation buyer))
+                         (Agent.budget buyer) i_b
+    l3AskP = sellerTick n (ValuationSchedule.unitValue (Agent.valuation seller))
+                          maxP i_s
+-- ── no L3 trade: L3 surplus = 0 ≤ L0 surplus ────────────────────────────────
+... | no _ = l0Nonneg-productive env s hProd
+-- ── L3 trades: arithmetic shows L0 also trades, then both equal vB - vS ──────
+... | yes l3cross
+  with l0AskP ≤? l0BidP
+  where
+    open SimEnvironment env
+    l0BidP = l0Tick n maxP (drawAt s fzero)
+    l0AskP = l0Tick n maxP (drawAt s (fsuc fzero))
+... | no ¬l0 = ⊥-elim (¬l0 l0cross-proof)
+  where
+    open SimEnvironment env
+    vS  = ValuationSchedule.unitValue (Agent.valuation seller)
+    r_b = ratio n (drawAt s fzero)
+    r_s = ratio n (drawAt s (fsuc fzero))
+    l0cross-proof : l0Tick n maxP (drawAt s (fsuc fzero)) ≤ l0Tick n maxP (drawAt s fzero)
+    l0cross-proof =
+      ≤-trans (l0AskLE-l3Ask vS maxP r_s hVS (ratioLeOne n (drawAt s (fsuc fzero))))
+      (≤-trans l3cross
+               (l3BidLE-l0Bid _ maxP r_b (ratioNonNeg n (drawAt s fzero)) hCap))
+... | yes _ = ≤-refl

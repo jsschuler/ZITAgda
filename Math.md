@@ -481,7 +481,12 @@ $$\exists\, s_0,\quad \text{l0Surplus}(\text{simL0}(s_0)) < \text{realizedSurplu
 | 14 | `BatchAuction` — `tryMatch` with decidable crossing, `matchZip` | ✓ |
 | 15 | `FlagshipFull` — concrete `SimFnL3`, pointwise flagship instantiated | ✓ |
 | 16 | `L0AgentStrategy` — concrete `SimFnL0`, negative-surplus witness, `l0Nonpos-inverted` | ✓ |
-| 17 | `Stochastic` — `survivalCount`, `FSDom`, `l3FSDom-l0-inverted` | ✓ |
+| 17 | `Stochastic` — `survivalCount`, `FSDom`, `l3FSDom-l0-inverted`, `l3Expected-l0-inverted`, `l0FSDom-l3-productive` | ✓ |
+| 18 | `MultiAgentSim` — k-pair extension; `realizedSurplus-++`; `AllInverted`/`AllProductive`; `l3FSDom-l0-invertedN`; `l0FSDom-l3-productiveN`; `l3ExpectedN-l0-inverted`; `l0ExpectedN-l3-productive` | ✓ |
+| 19 | `EfficiencyFSD` — efficiency ratio FSD; `l0EfficiencyRatio`; `l3EffFSDom-l0-inverted`; `l0EffFSDom-l3-productive`; expected-efficiency corollaries | ✓ |
+| 20 | `MultiAgentEffFSD` — k-pair efficiency FSD; `concreteL3EffN`; `concreteL0EffN`; `l3EffFSDom-l0-invertedN`; `l0EffFSDom-l3-productiveN`; expected corollaries | ✓ |
+| 21 | `MixedWelfare` — oracle-mix welfare; `Mixed` predicate; `concreteMixSurplusN`; `mixFSDom-l3`; `mixFSDom-l0`; expected corollaries | ✓ |
+| 22 | `MixedEffFSD` — oracle-mix efficiency FSD; `concreteMixEffN`; `mixEffFSDom-l3`; `mixEffFSDom-l0`; expected corollaries | ✓ |
 
 ---
 
@@ -644,6 +649,21 @@ $$\forall s,\quad \text{l0RealizedSurplus}(\text{concreteL0Sim}(s)) \leq \text{r
 Chain via transitivity:
 $$\underbrace{\text{l0Surplus}(s) \leq 0}_{\text{l0Nonpos-inverted}} \;\leq\; \underbrace{0 \leq \text{l3Surplus}(s)}_{\text{realizedSurplusNonNeg}} \quad \square$$
 
+**Theorem (l3Expected-l0-inverted — Expected Value Corollary).** For any environment with $v_b \leq v_s$ and any seed population $\Omega$:
+$$\sum_{s \in \Omega} \text{l0RealizedSurplus}(\text{concreteL0Sim}(s)) \;\leq\; \sum_{s \in \Omega} \text{realizedSurplus}(\text{concreteSim}(s))$$
+
+Since both sums share the denominator $|\Omega|$, this is equivalent to $\mathbb{E}_\Omega[\text{L0 surplus}] \leq \mathbb{E}_\Omega[\text{L3 surplus}]$.
+
+*Proof.* By `sumQ-map-mono`: if $g(s) \leq f(s)$ pointwise, then $\text{sumQ}(\text{map}\ g\ \Omega) \leq \text{sumQ}(\text{map}\ f\ \Omega)$. Apply to the same pointwise bound used in the FSD proof:
+$$\underbrace{\text{l0Surplus}(s) \leq 0}_{\text{l0Nonpos-inverted}} \leq \underbrace{0 \leq \text{l3Surplus}(s)}_{\text{realizedSurplusNonNeg}} \quad \square$$
+
+*Remark.* Both `l3FSDom-l0-inverted` (FSD) and `l3Expected-l0-inverted` (expected value) derive from the same pointwise bound — they are two consequences of a single structural fact. FSD is the strictly stronger result: $\mathbb{E}[f] \geq \mathbb{E}[g]$ follows from $\text{FSDom}(f, g, \Omega)$, but not conversely. Here both are proved directly from pointwise dominance rather than chaining through FSD.
+
+**Key lemma (sumQ-map-mono).** If $\forall s,\ g(s) \leq f(s)$ then:
+$$\text{sumQ}(\text{map}\ g\ xs) \leq \text{sumQ}(\text{map}\ f\ xs)$$
+
+*Proof* by induction on $xs$: base case $\leq$-refl; step case `+-mono-≤ (pw x) IH`. $\square$
+
 ### What FSD Gives Us
 
 The pointwise flagship (Theorem 6) says: there *exists* a seed where L3 beats L0.
@@ -651,13 +671,545 @@ The pointwise flagship (Theorem 6) says: there *exists* a seed where L3 beats L0
 FSD says: for *every* threshold $t$, L3 has at least as much probability mass above $t$ as L0. In particular:
 - $t = 0$: $\mathbb{P}(\text{L3} \geq 0) \geq \mathbb{P}(\text{L0} \geq 0)$ — L3 is at least as likely to be non-negative.
 - $t \to -\infty$: trivially both are 1.
-- Taking the integral (sum over all $t$): $\mathbb{E}[\text{L3}] \geq \mathbb{E}[\text{L0}]$.
+- Taking the integral (sum over all $t$): $\mathbb{E}[\text{L3}] \geq \mathbb{E}[\text{L0}]$ — which is exactly `l3Expected-l0-inverted`.
 
 This is a complete distributional comparison, not just a worst-case or best-case comparison. Any monotone criterion prefers L3 to L0 in inverted markets.
 
-### Scope and Limitations
+### Symmetric Results for Productive Markets
 
-The theorem applies to **inverted environments** ($v_b \leq v_s$). The simulation (Module 16 / `Main.agda`) shows that in **productive environments** ($v_b > v_s$), the inequality reverses: L0 FSD-dominates L3 because L3's conservative bidding suppresses many value-creating trades. A full characterization of when L3 dominates L0 would require analysis over the joint distribution of $v_b$ and $v_s$, which is left for future work.
+The inverted-market results have complete counterparts. In a **productive environment** ($v_s \leq v_b$), L3's conservative bidding suppresses value-creating trades, so L0 dominates. The theorems below establish this symmetrically.
+
+**Theorem (l0Nonneg-productive).** For any environment with $v_s \leq v_b$ and any seed $s$:
+$$0 \leq \text{l0RealizedSurplus}(\text{concreteL0Sim}(s))$$
+
+*Proof.* Case split on $\text{askP} \leq? \text{bidP}$:
+- *No match:* $\text{l0RealizedSurplus}([]) = 0$. $\square$
+- *Match:* The raw surplus is $v_b - v_s \geq 0$ by hypothesis $v_s \leq v_b$. Apply `p≤q⇒0≤q-p`. $\square$
+
+*Remark.* This is the symmetric counterpart of `l0Nonpos-inverted`: same proof structure, opposite hypothesis.
+
+---
+
+#### Arithmetic Lemmas for the Price-Range Comparison
+
+The key fact needed for productive markets is the **price chain**:
+$$\text{L0\_ask} \leq \text{L3\_ask} \leq \text{L3\_bid} \leq \text{L0\_bid}$$
+
+This means: if L3 agents cross (L3 ask $\leq$ L3 bid), then L0 agents also cross (L0 ask $\leq$ L0 bid). The left and right inequalities require separate lemmas.
+
+**Lemma (sum-cancel).** For any $v_s, p_{\max} \in \mathbb{Q}$:
+$$v_s + (p_{\max} - v_s) = p_{\max}$$
+
+*Proof.* By ring laws: $v_s + (p_{\max} - v_s) = v_s + p_{\max} - v_s = p_{\max} + (v_s - v_s) = p_{\max} + 0 = p_{\max}$.
+
+In Agda: `+-assoc`, `+-comm`, `+-inverseʳ`, `+-identityʳ`. $\square$
+
+*Remark.* This identity is non-trivial in Agda because the rational number type stores gcd-reduced fractions; `p_{\max} - v_s + v_s` does not reduce to `p_{\max}` by $\beta$-reduction alone. The ring axioms must be invoked explicitly.
+
+**Lemma (l0AskLE-l3Ask).** For $0 \leq v_s$ and $r \leq 1$:
+$$p_{\max} \cdot r \;\leq\; v_s + (p_{\max} - v_s) \cdot r$$
+
+*Proof.*
+$$p_{\max} \cdot r \;=\; (v_s + (p_{\max} - v_s)) \cdot r \quad \text{(sum-cancel)}$$
+$$= v_s \cdot r + (p_{\max} - v_s) \cdot r \quad \text{(*-distribʳ-+)}$$
+$$\leq v_s + (p_{\max} - v_s) \cdot r \quad \text{since } v_s \cdot r \leq v_s \cdot 1 = v_s \text{ (as } r \leq 1, v_s \geq 0 \text{)}$$
+
+The last step uses `*-monoˡ-≤-nonNeg` with the `NonNegative vS` instance derived from $0 \leq v_s$. $\square$
+
+**Lemma (l3BidLE-l0Bid).** For $0 \leq r$ and $\text{cap} \leq p_{\max}$:
+$$\text{cap} \cdot r \;\leq\; p_{\max} \cdot r$$
+
+*Proof.* Direct application of `*-monoʳ-≤-nonNeg` with `NonNegative r` instance. $\square$
+
+---
+
+**Theorem (l3LE-l0-productive — Pointwise Comparison).** For any environment with $0 \leq v_s$, $v_s \leq v_b$, and $\text{cap} \leq p_{\max}$ (where $\text{cap} = v_b \sqcap b_b$), and any seed $s$:
+$$\text{realizedSurplus}(\text{concreteSim}(s)) \;\leq\; \text{l0RealizedSurplus}(\text{concreteL0Sim}(s))$$
+
+*Proof.* Let $r_0 = \text{ratio}(n, s_0)$ (buyer draw), $r_1 = \text{ratio}(n, s_1)$ (seller draw). Define:
+$$\text{L3\_bid} = \text{cap} \cdot r_0, \quad \text{L3\_ask} = v_s + (p_{\max} - v_s) \cdot r_1$$
+$$\text{L0\_bid} = p_{\max} \cdot r_0, \quad \text{L0\_ask} = p_{\max} \cdot r_1$$
+
+The price chain holds:
+$$\underbrace{\text{L0\_ask} \leq \text{L3\_ask}}_{\text{l0AskLE-l3Ask with } 0 \leq v_s,\; r_1 \leq 1} \qquad \underbrace{\text{L3\_bid} \leq \text{L0\_bid}}_{\text{l3BidLE-l0Bid with } 0 \leq r_0,\; \text{cap} \leq p_{\max}}$$
+
+Case split on $\text{L3\_ask} \leq? \text{L3\_bid}$ (the L3 auction discriminant), then on $\text{L0\_ask} \leq? \text{L0\_bid}$:
+
+| L3 trades? | L0 trades? | Argument |
+|-----------|-----------|----------|
+| No | Either | $\text{L3 surplus} = 0 \leq \text{L0 surplus}$, by `l0Nonneg-productive`. |
+| Yes | No | Impossible: L3\_ask $\leq$ L3\_bid $\leq$ L0\_bid and L0\_ask $\leq$ L3\_ask, so L0\_ask $\leq$ L0\_bid — contradicts "No". `⊥-elim`. |
+| Yes | Yes | Both surpluses $= v_b - v_s$; `≤-refl`. |
+
+$\square$
+
+*Proof placement remark.* `l3LE-l0-productive` is proved inside `L0AgentStrategy.agda` so that the private `fromMaybe` helper (used in `runL0Matches`) is transparent. The L3 `collectMatches` (private in `BatchAuction.agda`) is also transparent from there because Agda's privacy is name-scoped — case-splitting on `L3_ask ≤? L3_bid` (the exact `with` scrutinee used by `tryMatch`) forces `collectMatches` to reduce definitionally.
+
+---
+
+**Theorem (l0FSDom-l3-productive — Symmetric FSD).** For any environment with $0 \leq v_s$, $v_s \leq v_b$, and $\text{cap} \leq p_{\max}$, and any seed population $\Omega$:
+$$\text{FSDom}\bigl(\text{l0RealizedSurplus} \circ \text{concreteL0Sim},\; \text{realizedSurplus} \circ \text{concreteSim},\; \Omega\bigr)$$
+
+i.e., L0 first-order stochastically dominates L3 in productive markets.
+
+*Proof.* By `FSD-from-pointwise` applied to `l3LE-l0-productive`. $\square$
+
+*Economic interpretation.* L3's constraints force bids $\leq v_b$ and asks $\geq v_s$, a strictly tighter range than L0's full $[0, p_{\max})$. Every seed where L3 trades, L0 also trades (for the same surplus $v_b - v_s$). But there are seeds where L0 trades and L3 does not — the conservative constraint prevents many value-creating crossings. Therefore L0's surplus distribution first-order dominates L3's.
+
+---
+
+### Symmetry Summary
+
+Together the two FSD results characterize the crossover completely:
+
+| Environment | Condition | Dominance |
+|-------------|-----------|-----------|
+| Inverted market | $v_b \leq v_s$ | L3 FSD-dominates L0 (`l3FSDom-l0-inverted`) |
+| Productive market | $v_s \leq v_b$ | L0 FSD-dominates L3 (`l0FSDom-l3-productive`) |
+
+The driving mechanism is the same in both cases: the price chain L0\_ask $\leq$ L3\_ask $\leq$ L3\_bid $\leq$ L0\_bid. In inverted markets, neither simulation should trade (surplus would be negative); L3's tighter constraints prevent more harmful trades. In productive markets, both should trade; L3's tighter constraints prevent more beneficial trades.
+
+---
+
+## Module 18: MultiAgentSim
+
+### Motivation
+
+The single-pair theorems in Module 17 prove FSD for one buyer and one seller. Real markets have many traders. This module extends both FSD results to $k$ buyer-seller pairs without changing any existing module.
+
+**Design principle:** every theorem here is an application of an existing lemma. The new proof content is limited to two structural lemmas about lists and one Vec induction per FSD direction.
+
+### Definitions
+
+**Multi-seed**
+
+$$\text{MultiSeed}(n, k) \;=\; \text{Vec}\bigl(\text{Seed}(\text{suc}\,n, 2),\; k\bigr)$$
+
+$k$ independent 2-draw seeds, one per buyer-seller pair. The pairs are fully decoupled.
+
+**Multi-agent trace**
+
+$$\text{concreteSimN}(\text{envs}, \mathbf{s}) \;=\; \text{concreteSim}(e_1, s_1) \,\mathbin{++}\, \cdots \,\mathbin{++}\, \text{concreteSim}(e_k, s_k)$$
+
+The output is a `Trace` (a `List Event`). `realizedSurplusNonNeg` applies immediately — non-negativity of the multi-agent L3 trace is a one-liner.
+
+**Multi-agent surplus sums** (by Vec recursion)
+
+$$\text{realizedSurplusN}(\text{envs}, \mathbf{s}) \;=\; \sum_{i=1}^{k} \text{realizedSurplus}(\text{concreteSim}(e_i, s_i))$$
+
+$$\text{l0RealizedSurplusN}(\text{envs}, \mathbf{s}) \;=\; \sum_{i=1}^{k} \text{l0RealizedSurplus}(\text{concreteL0Sim}(e_i, s_i))$$
+
+**Environment conditions**
+
+$$\text{AllInverted}(\text{envs}) \;\equiv\; \forall i,\; v_{b,i} \leq v_{s,i}$$
+
+$$\text{AllProductive}(\text{envs}) \;\equiv\; \forall i,\; 0 \leq v_{s,i} \;\wedge\; v_{s,i} \leq v_{b,i} \;\wedge\; \text{cap}_i \leq p_{\max,i}$$
+
+Both are inductive predicates on `Vec SimEnvironment k`, proved by providing one condition per position.
+
+### Structural Lemmas
+
+**Lemma (tradesView-++)** (private):
+$$\text{tradesView}(t_1 \mathbin{++} t_2) \;=\; \text{tradesView}(t_1) \mathbin{++} \text{tradesView}(t_2)$$
+
+*Proof* by structural induction on $t_1$, case-splitting on each of the five `Event` constructors. The `TradeSettled` case contributes an element; all other four constructors are transparent (their events are ignored by `tradesView`). $\square$
+
+**Lemma (sumSurplus-++)** (private):
+$$\text{sumSurplus}(ms_1 \mathbin{++} ms_2) \;=\; \text{sumSurplus}(ms_1) + \text{sumSurplus}(ms_2)$$
+
+*Proof* by induction on $ms_1$:
+- Base: $\text{sumSurplus}([]) + \text{sumSurplus}(ms_2) = 0 + \text{sumSurplus}(ms_2) = \text{sumSurplus}(ms_2)$ by `+-identityˡ`. $\square$
+- Step: chain via `cong` (IH) then `sym +-assoc`. $\square$
+
+**Lemma (realizedSurplus-++)**:
+$$\text{realizedSurplus}(t_1 \mathbin{++} t_2) \;=\; \text{realizedSurplus}(t_1) + \text{realizedSurplus}(t_2)$$
+
+*Proof*: chain `tradesView-++` and `sumSurplus-++` via `cong`. $\square$
+
+**Lemma (realizedSurplusN-eq)**:
+$$\text{realizedSurplus}(\text{concreteSimN}(\text{envs}, \mathbf{s})) \;=\; \text{realizedSurplusN}(\text{envs}, \mathbf{s})$$
+
+*Proof* by induction on $k$:
+- Base ($k=0$): both sides are $0$. $\square$
+- Step: $\text{realizedSurplus}(\text{concreteSim}(e, s) \mathbin{++} \text{concreteSimN}(\text{envs}, \mathbf{s}'))$
+  $= \text{realizedSurplus}(\text{concreteSim}(e, s)) + \text{realizedSurplus}(\text{concreteSimN}(\text{envs}, \mathbf{s}'))$ by `realizedSurplus-++`
+  $= \text{realizedSurplus}(\text{concreteSim}(e, s)) + \text{realizedSurplusN}(\text{envs}, \mathbf{s}')$ by IH. $\square$
+
+### Theorems
+
+**Theorem (concreteSimNNonNeg).**
+$$\forall\, \text{envs},\, \mathbf{s},\quad 0 \leq \text{realizedSurplus}(\text{concreteSimN}(\text{envs}, \mathbf{s}))$$
+
+*Proof*: `realizedSurplusNonNeg (concreteSimN envs seeds)`. $\square$
+
+*Remark.* This one-line proof reflects the extension principle: `concreteSimN` produces a `Trace`, and `realizedSurplusNonNeg` applies to ALL traces. No per-pair reasoning is needed.
+
+---
+
+**Lemma (l0LEL3-invertedN — Pointwise Bound)** (private):
+If $\text{AllInverted}(\text{envs})$, then for every multi-seed $\mathbf{s}$:
+$$\text{l0RealizedSurplusN}(\text{envs}, \mathbf{s}) \;\leq\; \text{realizedSurplusN}(\text{envs}, \mathbf{s})$$
+
+*Proof* by induction on $k$:
+- Base: $0 \leq 0$. $\square$
+- Step:
+$$\underbrace{\text{l0Surplus}(s) \leq 0}_{\text{l0Nonpos-inverted}} \leq \underbrace{0 \leq \text{l3Surplus}(s)}_{\text{realizedSurplusNonNeg}}$$
+Apply `+-mono-≤` to combine the head bound with the IH on the tail. $\square$
+
+**Theorem (l3FSDom-l0-invertedN — Multi-Agent FSD, Inverted).** If $\text{AllInverted}(\text{envs})$, then for any seed population $\Omega$:
+$$\text{FSDom}\bigl(\text{realizedSurplusN}(\text{envs}),\; \text{l0RealizedSurplusN}(\text{envs}),\; \Omega\bigr)$$
+
+*Proof*: `FSD-from-pointwise` applied to `l0LEL3-invertedN`. $\square$
+
+---
+
+**Lemma (l3LEL0-productiveN — Pointwise Bound)** (private):
+If $\text{AllProductive}(\text{envs})$, then for every multi-seed $\mathbf{s}$:
+$$\text{realizedSurplusN}(\text{envs}, \mathbf{s}) \;\leq\; \text{l0RealizedSurplusN}(\text{envs}, \mathbf{s})$$
+
+*Proof* by induction on $k$:
+- Base: $0 \leq 0$. $\square$
+- Step: apply `l3LE-l0-productive` to the head pair, then `+-mono-≤` with the IH. $\square$
+
+**Theorem (l0FSDom-l3-productiveN — Multi-Agent FSD, Productive).** If $\text{AllProductive}(\text{envs})$, then for any $\Omega$:
+$$\text{FSDom}\bigl(\text{l0RealizedSurplusN}(\text{envs}),\; \text{realizedSurplusN}(\text{envs}),\; \Omega\bigr)$$
+
+*Proof*: `FSD-from-pointwise` applied to `l3LEL0-productiveN`. $\square$
+
+---
+
+**Corollary (l3FSDom-l0-invertedN-trace).** The FSD result can equivalently be stated in terms of the `Trace` output of `concreteSimN`:
+$$\text{FSDom}\bigl(\text{realizedSurplus} \circ \text{concreteSimN}(\text{envs}),\; \text{l0RealizedSurplusN}(\text{envs}),\; \Omega\bigr)$$
+
+*Proof*: combine `l0LEL3-invertedN` with `≤-reflexive (sym (realizedSurplusN-eq ...))` to get the pointwise bound against `realizedSurplus ∘ concreteSimN`, then apply `FSD-from-pointwise`. $\square$
+
+---
+
+**Key lemma (sumQ-map-mono)** (private, reproved locally from Stochastic):
+If $\forall s,\ g(s) \leq f(s)$ then $\text{sumQ}(\text{map}\ g\ \Omega) \leq \text{sumQ}(\text{map}\ f\ \Omega)$.
+
+*Proof* by induction: base `≤-refl`; step `+-mono-≤ (pw x) IH`. $\square$
+
+**Theorem (l3ExpectedN-l0-inverted).** If $\text{AllInverted}(\text{envs})$, then for any $\Omega$:
+$$\sum_{\mathbf{s} \in \Omega} \text{l0RealizedSurplusN}(\text{envs}, \mathbf{s}) \;\leq\; \sum_{\mathbf{s} \in \Omega} \text{realizedSurplusN}(\text{envs}, \mathbf{s})$$
+
+*Proof*: `sumQ-map-mono` applied to `l0LEL3-invertedN`. $\square$
+
+**Theorem (l0ExpectedN-l3-productive).** If $\text{AllProductive}(\text{envs})$, then for any $\Omega$:
+$$\sum_{\mathbf{s} \in \Omega} \text{realizedSurplusN}(\text{envs}, \mathbf{s}) \;\leq\; \sum_{\mathbf{s} \in \Omega} \text{l0RealizedSurplusN}(\text{envs}, \mathbf{s})$$
+
+*Proof*: `sumQ-map-mono` applied to `l3LEL0-productiveN`. $\square$
+
+*Remark.* Both expected-value theorems derive from the same pointwise bounds as the FSD theorems. FSD is strictly stronger (it implies the expected-value comparison but not conversely); both are proved directly from pointwise dominance rather than chaining through FSD, mirroring the structure of Module 17.
+
+### Extension Summary
+
+| Theorem | Module | Single-pair ingredient |
+|---------|--------|----------------------|
+| `l3FSDom-l0-invertedN` | 18 | `l0Nonpos-inverted` (mod 16) + `realizedSurplusNonNeg` (mod 6) |
+| `l0FSDom-l3-productiveN` | 18 | `l3LE-l0-productive` (mod 16) |
+| `l3ExpectedN-l0-inverted` | 18 | same pointwise bound as `l3FSDom-l0-invertedN` |
+| `l0ExpectedN-l3-productive` | 18 | same pointwise bound as `l0FSDom-l3-productiveN` |
+| FSD theorems use | | `FSD-from-pointwise` (mod 17) |
+| Expected theorems use | | `sumQ-map-mono` (reproved locally) |
+
+The $k=1$ case of each multi-agent theorem recovers the corresponding single-pair result from Module 17 exactly.
+
+---
+
+## Module 19: EfficiencyFSD
+
+### Motivation
+
+Modules 17–18 prove FSD on *raw realized surplus*. Gode & Sunder (1993) report their headline result in terms of the **efficiency ratio** — the fraction of the maximum feasible surplus actually realised. This module lifts both FSD directions to the efficiency metric, proving that the distributional dominance carries through the normalisation step.
+
+### Definitions
+
+**Profitable pair and max feasible surplus** (from Module 7)
+
+$$\text{ProfitablePair} = \{(v_b, v_s) \mid v_b \geq v_s\}$$
+$$\text{maxFeasibleSurplus}(\mathit{ps}) = \sum_{(v_b,v_s)\in\mathit{ps}} (v_b - v_s)$$
+
+**L3 efficiency ratio**
+
+$$\text{efficiencyRatio}(t, \mathit{ps}, h) = \frac{\text{realizedSurplus}(t)}{\text{maxFeasibleSurplus}(\mathit{ps})}$$
+
+where $h : 0 < \text{mfs}$. (Defined in Module 7; $h$ provides the `NonZero` instance for division.)
+
+**L0 efficiency ratio**
+
+$$\text{l0EfficiencyRatio}(\mathit{ms}, \mathit{ps}, h) = \frac{\text{l0RealizedSurplus}(\mathit{ms})}{\text{mfs}}$$
+
+An L0 analogue that takes raw match list `ms : List RawMatch` rather than a certified `Trace`.
+
+**Concrete efficiency functions**
+
+$$\text{concreteL3Eff}_{n}(\mathit{env}, \mathit{ps}, h)(s) = \text{efficiencyRatio}\bigl(\text{concreteSim}_{n}(\mathit{env}, s),\; \mathit{ps},\; h\bigr)$$
+$$\text{concreteL0Eff}_{n}(\mathit{env}, \mathit{ps}, h)(s) = \text{l0EfficiencyRatio}\bigl(\text{concreteL0Sim}_{n}(\mathit{env}, s),\; \mathit{ps},\; h\bigr)$$
+
+Both are functions `Seed (suc n) 2 → ℚ`, the type required by `FSDom`.
+
+### Key Technical Lemma
+
+**Monotonicity of multiplication by $1/\mathit{mfs}$.**
+
+Since $0 < \mathit{mfs}$, we have $\text{Positive}(\mathit{mfs})$, hence $\text{Positive}(1/\mathit{mfs})$ (by `1/pos⇒pos`), hence $\text{NonNeg}(1/\mathit{mfs})$ (by `pos⇒nonNeg`). Then `*-monoʳ-≤-nonNeg (1/ mfs)` gives:
+
+$$a \leq b \;\Longrightarrow\; a \times (1/\mathit{mfs}) \leq b \times (1/\mathit{mfs})$$
+
+Since $a \div \mathit{mfs} = a \times (1/\mathit{mfs})$ definitionally (how `_÷_` is defined in the stdlib), the result type matches the efficiency ratio directly.
+
+*Implementation note:* The lemma is not wrapped as a named `div-mono-≤` because Agda's `_÷_` operator requires `{{NonZero c}}` at the type level when `÷` appears in a function's return type. Rather than introduce a lemma with `÷` in its signature, we call `ℚP.*-monoʳ-≤-nonNeg (1/ mfs)` directly and provide the instance chain (`>-nonZero`, `positive`, `1/pos⇒pos`, `pos⇒nonNeg`) in each theorem's `where` block. Agda accepts the result by definitional equality.
+
+### Theorems
+
+**Theorem (l3EffFSDom-l0-inverted).**
+In any environment with $v_b \leq v_s$, profitable-pair list $\mathit{ps}$ with $\mathit{mfs} > 0$, and seed population $\Omega$:
+
+$$\text{FSDom}\bigl(\text{concreteL3Eff},\; \text{concreteL0Eff},\; \Omega\bigr)$$
+
+*Proof.*
+By `FSD-from-pointwise`; suffices to show $\forall s,\; \text{concreteL0Eff}(s) \leq \text{concreteL3Eff}(s)$.
+
+$$\underbrace{\text{l0}(s) \leq 0}_{\text{l0Nonpos-inverted}} \;\xrightarrow{\times\,(1/\mathit{mfs})}\; \text{l0}(s)/\mathit{mfs} \leq 0 \leq \underbrace{0 \leq \text{l3}(s)/\mathit{mfs}}_{\text{realizedSurplusNonNeg}\,\times\,(1/\mathit{mfs})}$$
+
+Combined by `≤-trans`. $\square$
+
+**Theorem (l0EffFSDom-l3-productive).**
+In any environment with $v_s \leq v_b$, $0 \leq v_s$, $\text{cap} \leq p_{\max}$, $\mathit{mfs} > 0$, and $\Omega$:
+
+$$\text{FSDom}\bigl(\text{concreteL0Eff},\; \text{concreteL3Eff},\; \Omega\bigr)$$
+
+*Proof.*
+By `FSD-from-pointwise`; suffices to show $\forall s,\; \text{concreteL3Eff}(s) \leq \text{concreteL0Eff}(s)$.
+
+$$\underbrace{\text{l3}(s) \leq \text{l0}(s)}_{\text{l3LE-l0-productive}} \;\xrightarrow{\times\,(1/\mathit{mfs})}\; \text{l3}(s)/\mathit{mfs} \leq \text{l0}(s)/\mathit{mfs} \quad \square$$
+
+**Corollary (l3EffExpected-l0-inverted).**
+Inverted market: $\mathbb{E}_\Omega[\text{L3 eff}] \geq \mathbb{E}_\Omega[\text{L0 eff}]$.
+
+Proof: `sumQ-map-mono` applied to the same pointwise bound as the FSD theorem.
+
+**Corollary (l0EffExpected-l3-productive).**
+Productive market: $\mathbb{E}_\Omega[\text{L0 eff}] \geq \mathbb{E}_\Omega[\text{L3 eff}]$.
+
+### Hypothesis Discussion: $\mathit{mfs} > 0$
+
+Both theorems require $\mathit{mfs} = \text{maxFeasibleSurplus}(\mathit{ps}) > 0$ for the efficiency ratio to be defined.
+
+In the *productive* case, $\mathit{mfs} > 0$ iff $v_b > v_s$ strictly — the natural assumption for efficiency to be meaningful.
+
+In the *inverted* case, the single simulation pair $(v_b, v_s)$ with $v_b \leq v_s$ contributes zero or negative value to $\mathit{ps}$, so $\mathit{mfs} > 0$ requires the profitable-pair list to include pairs from a parallel productive sub-market. The theorem is stated for any such list, making the scope explicit.
+
+### Extension table
+
+| Result | Module | Depends on |
+|--------|--------|------------|
+| `l0EfficiencyRatio` | 19 | `l0RealizedSurplus` (mod 10) |
+| `concreteL3Eff` | 19 | `efficiencyRatio` (mod 7) + `concreteSim` (mod 14) |
+| `concreteL0Eff` | 19 | `l0EfficiencyRatio` + `concreteL0Sim` (mod 15) |
+| `l3EffFSDom-l0-inverted` | 19 | `l0Nonpos-inverted` (mod 15) + `realizedSurplusNonNeg` (mod 6) + `FSD-from-pointwise` (mod 17) |
+| `l0EffFSDom-l3-productive` | 19 | `l3LE-l0-productive` (mod 15) + `FSD-from-pointwise` (mod 17) |
+| Expected corollaries | 19 | same pointwise bounds + `sumQ-map-mono` (reproved locally) |
+
+Zero changes to any existing module.
+
+---
+
+## Module 20: MultiAgentEffFSD
+
+### Motivation
+
+This module closes the 2×2 table of FSD results:
+
+| | Single pair | k pairs |
+|--|-------------|---------|
+| Raw surplus FSD | Module 17 (`Stochastic`) | Module 18 (`MultiAgentSim`) |
+| Efficiency FSD | Module 19 (`EfficiencyFSD`) | **Module 20** (`MultiAgentEffFSD`) |
+
+The k-pair efficiency ratio divides the total portfolio realized surplus by a shared denominator $\mathit{mfs}$. The proofs combine the Vec-induction structure of Module 18 with the division-by-scalar technique of Module 19.
+
+### Definitions
+
+**Portfolio efficiency functions**
+
+$$\text{concreteL3EffN}_{n,k}(\text{envs}, \mathit{ps}, h)(\mathbf{s}) = \frac{\text{realizedSurplusN}_{n,k}(\text{envs}, \mathbf{s})}{\mathit{mfs}}$$
+$$\text{concreteL0EffN}_{n,k}(\text{envs}, \mathit{ps}, h)(\mathbf{s}) = \frac{\text{l0RealizedSurplusN}_{n,k}(\text{envs}, \mathbf{s})}{\mathit{mfs}}$$
+
+where $\mathit{mfs} = \text{maxFeasibleSurplus}(\mathit{ps}) > 0$ (shared denominator for all k pairs).
+
+Both are functions $\text{Vec}(\text{Seed}(\text{suc}\,n, 2), k) \to \mathbb{Q}$, the type required by `FSDom`.
+
+### Private Lemmas
+
+**l0LEL3-invertedN** (reproved from private in MultiAgentSim).
+In `AllInverted` markets:
+$$\text{l0RealizedSurplusN}(\text{envs}, \mathbf{s}) \leq \text{realizedSurplusN}(\text{envs}, \mathbf{s})$$
+Proof: Vec induction, applying `l0Nonpos-inverted` + `realizedSurplusNonNeg` + `+-mono-≤` at each step.
+
+**l3LEL0-productiveN** (reproved from private in MultiAgentSim).
+In `AllProductive` markets:
+$$\text{realizedSurplusN}(\text{envs}, \mathbf{s}) \leq \text{l0RealizedSurplusN}(\text{envs}, \mathbf{s})$$
+Proof: Vec induction, applying `l3LE-l0-productive` + `+-mono-≤`.
+
+*Note:* The `AllProductive` constructor `_ap∷_` bundles three conditions as a product `(0ℚ ≤ vS × vS ≤ vB × cap ≤ maxP)`. Pattern matching on the product in a function LHS causes a parse ambiguity with the infix constructor; projections (`proj₁`, `proj₂`) resolve this.
+
+### Theorems
+
+**Theorem (l3EffFSDom-l0-invertedN).**
+For $k$ pairs with `AllInverted` conditions, $\mathit{mfs} > 0$, $\Omega$:
+$$\text{FSDom}\bigl(\text{concreteL3EffN},\; \text{concreteL0EffN},\; \Omega\bigr)$$
+
+*Proof.* `FSD-from-pointwise` + `l0LEL3-invertedN` lifted by `*-monoʳ-≤-nonNeg (1/ mfs)`. $\square$
+
+**Theorem (l0EffFSDom-l3-productiveN).**
+For $k$ pairs with `AllProductive` conditions, $\mathit{mfs} > 0$, $\Omega$:
+$$\text{FSDom}\bigl(\text{concreteL0EffN},\; \text{concreteL3EffN},\; \Omega\bigr)$$
+
+*Proof.* `FSD-from-pointwise` + `l3LEL0-productiveN` lifted by `*-monoʳ-≤-nonNeg (1/ mfs)`. $\square$
+
+**Corollary (l3EffExpectedN-l0-inverted).** $\mathbb{E}_\Omega[\text{L3 portfolio eff}] \geq \mathbb{E}_\Omega[\text{L0 portfolio eff}]$.
+
+**Corollary (l0EffExpectedN-l3-productive).** $\mathbb{E}_\Omega[\text{L0 portfolio eff}] \geq \mathbb{E}_\Omega[\text{L3 portfolio eff}]$.
+
+### Extension table
+
+| Result | Module | Depends on |
+|--------|--------|------------|
+| `concreteL3EffN` | 20 | `realizedSurplusN` (mod 18) + `maxFeasibleSurplus` (mod 7) |
+| `concreteL0EffN` | 20 | `l0RealizedSurplusN` (mod 18) |
+| `l0LEL3-invertedN` (local) | 20 | `l0Nonpos-inverted` (mod 15) + `realizedSurplusNonNeg` (mod 6) |
+| `l3LEL0-productiveN` (local) | 20 | `l3LE-l0-productive` (mod 15) |
+| `l3EffFSDom-l0-invertedN` | 20 | local `l0LEL3-invertedN` + `FSD-from-pointwise` (mod 17) |
+| `l0EffFSDom-l3-productiveN` | 20 | local `l3LEL0-productiveN` + `FSD-from-pointwise` (mod 17) |
+| Expected corollaries | 20 | same pointwise bounds + `sumQ-map-mono` (reproved locally) |
+
+Zero changes to any existing module. The $k=1$ case recovers the single-pair results from Module 19.
+
+---
+
+## Module 21: MixedWelfare
+
+### Motivation
+
+Modules 17–20 assume all pairs share the same market type (all inverted or all productive). Real markets typically mix both: some buyer-seller pairs have $v_b < v_s$ (trades would destroy value) and others $v_s < v_b$ (trades create value). This module asks: given a mixed portfolio, which agent rule achieves the best welfare?
+
+The answer is the **oracle mix**: use L3 for inverted pairs (to prevent harmful trades) and L0 for productive pairs (to execute beneficial ones). This oracle mix FSD-dominates both pure strategies simultaneously.
+
+### The Mixed Predicate
+
+$$\text{data Mixed} : \forall \{k\} \to \text{Vec SimEnvironment}\, k \to \text{Set}$$
+
+Constructors:
+- $\text{mix[]} : \text{Mixed}\, \mathbf{[]}$
+- $\text{invMix} : v_b(e) \leq v_s(e) \to \text{Mixed}\, \mathit{es} \to \text{Mixed}\, (e \mathbin{v\!\!:\!:} \mathit{es})$
+- $\text{prodMix} : (0 \leq v_s(e) \times v_s(e) \leq v_b(e) \times \text{cap}(e) \leq p_{\max}(e)) \to \text{Mixed}\, \mathit{es} \to \text{Mixed}\, (e \mathbin{v\!\!:\!:} \mathit{es})$
+
+`Mixed` generalises both `AllInverted` (all constructors `invMix`) and `AllProductive` (all `prodMix`).
+
+### Oracle Mix Simulation
+
+$$\text{concreteMixSurplusN}(\text{envs}, h, \mathbf{s}) = \begin{cases}
+0 & k = 0 \\
+\text{realizedSurplus}(\text{concreteSim}(e, s_1)) + \text{concreteMixSurplusN}(\mathit{es}, h', \mathbf{s'}) & \text{invMix case} \\
+\text{l0RealizedSurplus}(\text{concreteL0Sim}(e, s_1)) + \text{concreteMixSurplusN}(\mathit{es}, h', \mathbf{s'}) & \text{prodMix case}
+\end{cases}$$
+
+The function recurses on the `Mixed` proof $h$, dispatching to L3 or L0 at each pair.
+
+### Pointwise Bounds (Private)
+
+**l3LE-mix**: $\forall \mathbf{s},\; \text{realizedSurplusN}(\text{envs}, \mathbf{s}) \leq \text{concreteMixSurplusN}(\text{envs}, h, \mathbf{s})$
+
+*Proof by induction on Mixed:*
+- `mix[]`: $0 \leq 0$ by `≤-refl`.
+- `invMix` case: mix and L3 use the same (L3) strategy for head pair. Head contributions equal; `+-monoʳ-≤ (realizedSurplus ...) IH`.
+- `prodMix` case: head L3 surplus ≤ head L0 surplus = mix surplus, by `l3LE-l0-productive`; tail by IH via `+-mono-≤`.
+
+**l0LE-mix**: $\forall \mathbf{s},\; \text{l0RealizedSurplusN}(\text{envs}, \mathbf{s}) \leq \text{concreteMixSurplusN}(\text{envs}, h, \mathbf{s})$
+
+*Proof by induction on Mixed:*
+- `invMix` case: head L0 surplus $\leq 0 \leq$ head L3 surplus = mix surplus, by `l0Nonpos-inverted` + `realizedSurplusNonNeg`; tail by IH.
+- `prodMix` case: mix uses L0 for head; contributions equal; `+-monoʳ-≤ (l0RealizedSurplus ...) IH`.
+
+*Implementation note:* `+-monoʳ-≤ r h` (stdlib) takes the common addend `r` explicitly. This is necessary for the `≤-refl` cases: `+-mono-≤ ≤-refl h` leaves an implicit metavariable for the common term that Agda cannot infer from an unreduced `realizedSurplusN` goal. Providing `r` explicitly forces the unification.
+
+### Theorems
+
+**Theorem (mixFSDom-l3).** For any Mixed portfolio and $\Omega$:
+$$\text{FSDom}\bigl(\text{concreteMixSurplusN}(\text{envs}, h),\; \text{realizedSurplusN}(\text{envs}),\; \Omega\bigr)$$
+
+*Proof:* `FSD-from-pointwise` + `l3LE-mix`. $\square$
+
+**Theorem (mixFSDom-l0).** For any Mixed portfolio and $\Omega$:
+$$\text{FSDom}\bigl(\text{concreteMixSurplusN}(\text{envs}, h),\; \text{l0RealizedSurplusN}(\text{envs}),\; \Omega\bigr)$$
+
+*Proof:* `FSD-from-pointwise` + `l0LE-mix`. $\square$
+
+**Corollary (mixExpected-l3).** $\mathbb{E}_\Omega[\text{L3 welfare}] \leq \mathbb{E}_\Omega[\text{oracle mix welfare}]$.
+
+**Corollary (mixExpected-l0).** $\mathbb{E}_\Omega[\text{L0 welfare}] \leq \mathbb{E}_\Omega[\text{oracle mix welfare}]$.
+
+### Special Cases and Generalisation
+
+| Mixed conditions | concreteMixSurplusN | mixFSDom-l3 | mixFSDom-l0 |
+|------------------|---------------------|-------------|-------------|
+| All `invMix` | = realizedSurplusN | trivial | = `l3FSDom-l0-invertedN` (Mod 18) |
+| All `prodMix` | = l0RealizedSurplusN | = `l0FSDom-l3-productiveN` (Mod 18) | trivial |
+| Mixed | oracle dominates both | new | new |
+
+Module 21 strictly generalises `MultiAgentSim`'s FSD results. Zero changes to any existing module.
+
+### Extension table
+
+| Result | Module | Depends on |
+|--------|--------|------------|
+| `Mixed` predicate | 21 | `AllInverted`/`AllProductive` conditions (mod 18) |
+| `concreteMixSurplusN` | 21 | `concreteSim` (mod 14) + `concreteL0Sim` (mod 15) |
+| `l3LE-mix` (private) | 21 | `l3LE-l0-productive` (mod 15) |
+| `l0LE-mix` (private) | 21 | `l0Nonpos-inverted` (mod 15) + `realizedSurplusNonNeg` (mod 6) |
+| `mixFSDom-l3`, `mixFSDom-l0` | 21 | `FSD-from-pointwise` (mod 17) |
+| `mixExpected-l3`, `mixExpected-l0` | 21 | `sumQ-map-mono` (reproved locally) |
+
+---
+
+## Module 22: MixedEffFSD
+
+### Motivation
+
+Module 21 proves oracle-mix welfare dominance on raw surplus. This module lifts to the efficiency ratio, closing the final cell of the 3D result table:
+
+| | Single pair | k pairs | Mixed market |
+|--|-------------|---------|--------------|
+| Raw surplus FSD | Mod 17 | Mod 18 | Mod 21 |
+| Efficiency FSD | Mod 19 | Mod 20 | **Mod 22** |
+
+### Definition
+
+$$\text{concreteMixEffN}_{n,k}(\text{envs}, h, \mathit{ps}, m, \mathbf{s}) = \frac{\text{concreteMixSurplusN}_{n,k}(\text{envs}, h, \mathbf{s})}{\mathit{mfs}}$$
+
+where $m : 0 < \mathit{mfs}$.
+
+### Private Lemmas
+
+`l3LE-mix` and `l0LE-mix` from Module 21 are reproved locally (they are private there).  The proofs are identical.
+
+### Theorems
+
+**Theorem (mixEffFSDom-l3).**
+For any Mixed portfolio, $\mathit{mfs} > 0$, and $\Omega$:
+$$\text{FSDom}\bigl(\text{concreteMixEffN},\; \text{concreteL3EffN},\; \Omega\bigr)$$
+
+*Proof:* `FSD-from-pointwise` + `l3LE-mix` lifted by `*-monoʳ-≤-nonNeg (1/ mfs)`. $\square$
+
+**Theorem (mixEffFSDom-l0).**
+$$\text{FSDom}\bigl(\text{concreteMixEffN},\; \text{concreteL0EffN},\; \Omega\bigr)$$
+
+*Proof:* `FSD-from-pointwise` + `l0LE-mix` lifted by `*-monoʳ-≤-nonNeg (1/ mfs)`. $\square$
+
+**Corollaries:** `mixEffExpected-l3`, `mixEffExpected-l0` via `sumQ-map-mono`.
+
+Zero changes to any existing module.
 
 ---
 
