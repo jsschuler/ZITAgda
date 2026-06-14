@@ -1213,6 +1213,64 @@ Zero changes to any existing module.
 
 ---
 
+## Module 23: PureStrategyIncomparable
+
+### Motivation
+
+Modules 21–22 show the oracle mix FSD-dominates both pure strategies in every mixed market. This module proves the complementary **negative result**: neither pure strategy FSD-dominates the other in a mixed market. Together these characterise the oracle mix as the unique FSD-optimal pure-observation strategy.
+
+### Main Theorems
+
+**Theorem (l0NotFSDom-l3-mixed).**
+If $\text{L0}(\mathbf{s}_1) < 0$ for some seed $\mathbf{s}_1$, then:
+$$\lnot\ \text{FSDom}\bigl(\text{l0RealizedSurplusN}\ \text{envs},\; \text{realizedSurplusN}\ \text{envs},\; [\mathbf{s}_1]\bigr)$$
+
+*Proof.* Unfolding `FSDom`, the negation requires finding a threshold $t$ where the survival-count inequality fails.  Take $t = 0$:
+$$\text{survivalCount}(\text{L3},\ [\mathbf{s}_1],\ 0) = 1$$
+because $0 \leq \text{realizedSurplusN}\ \text{envs}\ \mathbf{s}_1$ (proved by `realizedSurplusN-nonNeg`, a local induction using `realizedSurplusNonNeg` per pair), so the filter keeps $\mathbf{s}_1$.
+$$\text{survivalCount}(\text{L0},\ [\mathbf{s}_1],\ 0) = 0$$
+because $\text{L0}(\mathbf{s}_1) < 0$, so $0 \not\leq \text{L0}(\mathbf{s}_1)$ and the filter drops $\mathbf{s}_1$.
+
+`FSDom` at $t = 0$ would give $1 \leq_\mathbb{N} 0$ — absurd. $\square$
+
+**Theorem (l3NotFSDom-l0-mixed).**
+If $\text{L3}(\mathbf{s}_2) < \text{L0}(\mathbf{s}_2)$ for some seed $\mathbf{s}_2$, then:
+$$\lnot\ \text{FSDom}\bigl(\text{realizedSurplusN}\ \text{envs},\; \text{l0RealizedSurplusN}\ \text{envs},\; [\mathbf{s}_2]\bigr)$$
+
+*Proof.* Take $t = \text{L0}(\mathbf{s}_2)$:
+- $\text{survivalCount}(\text{L0},\ [\mathbf{s}_2],\ t) = 1$ since $\text{L0}(\mathbf{s}_2) \geq t$ by $\leq$-refl.
+- $\text{survivalCount}(\text{L3},\ [\mathbf{s}_2],\ t) = 0$ since $\text{L3}(\mathbf{s}_2) < t$.
+
+`FSDom` at $t$ would give $1 \leq_\mathbb{N} 0$ — absurd. $\square$
+
+### Proof Technique
+
+The `survivalCount` function is:
+$$\text{survivalCount}(f, [x], t) = \text{length}\bigl(\text{filterᵇ}\ (\lambda s.\, \text{isYes}(t \leq? f(s)))\ [x]\bigr)$$
+
+After `filterᵇ` reduces on the singleton: $\text{if}\ \text{isYes}(t \leq? f(x))\ \text{then}\ [x]\ \text{else}\ []$. A `with`-split on $t \leq? f(x)$ then gives:
+- `yes _` branch: filter keeps $x$; `length [x] = 1`; goal `1 ≡ 1` closes by `refl`.
+- `no _` branch: filter drops $x$; `length [] = 0`; goal `0 ≡ 0` closes by `refl`.
+
+The `¬ (1 ≤ℕ 0)` contradiction is closed by the absurd pattern `()` — no `Data.Nat.≤` constructor produces `suc 0 ≤ 0`.  The two survey-count equalities are rewritten into the FSDom hypothesis via `subst₂`.
+
+### Economic Interpretation
+
+In a mixed market, pure L3 will always miss some value-creating trades (productive pairs), while pure L0 will sometimes execute value-destroying trades (inverted pairs). Each strategy is therefore sometimes dominated by the other on a suitable singleton population. The oracle mix — by construction using L3 exactly where it excels and L0 exactly where it excels — is the unique FSD-dominant strategy.
+
+### Extension Table
+
+| Result | Module | Depends on |
+|--------|--------|------------|
+| `realizedSurplusN-nonNeg` (private) | 23 | `realizedSurplusNonNeg` (mod 6) |
+| `sc-singleton-yes`, `sc-singleton-no` (private) | 23 | `survivalCount` (mod 17), `ℚP._≤?_` |
+| `l0NotFSDom-l3-mixed` | 23 | `realizedSurplusN` (mod 18), `l0RealizedSurplusN` (mod 18), `FSDom` (mod 17) |
+| `l3NotFSDom-l0-mixed` | 23 | same |
+
+Zero changes to any existing module.
+
+---
+
 ## Key Inequality Chain (Flagship Theorem Preview)
 
 For any trade cleared in a batch auction under L3, the clearing price $c$ satisfies:

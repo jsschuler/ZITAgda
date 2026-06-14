@@ -43,31 +43,32 @@ In the market environment, L3's conservative constraints prevent many beneficial
 
 ## Module Structure
 
-The proof is developed across 22 modules, building from primitive types to the final stochastic dominance theorems.
+The proof is developed across 23 modules, building from primitive types to the final stochastic dominance theorems.
 
 ```
-Agent.agda              — Agents: roles, valuations, budgets, inventory
-Proposal.agda           — Raw proposals; L0 and L3 constraint levels
-Seed.agda               — Oracle tape: Vec (Fin n) k, the random number source
-Institution.agda        — Batch clearing auction; BuyerAdmissible / SellerAdmissible
-Surplus.agda            — Trade surplus definition; proof that 0 ≤ surplus(m) for L3
-Trace.agda              — Event log; realizedSurplus; non-negativity theorem
-Efficiency.agda         — Efficiency ratio and its non-negativity
-Flagship.agda           — L0 witness match (rawSurplus = −1); structural dominance
-Probability.agda        — sumQ; non-negative sums; strict monotonicity
-SimulationModel.agda    — Abstract flagship: Theorems 6 (pointwise) and 7 (expected)
-PriceGrid.agda          — Uniform tick grids; ratio ≤ 1 proved from gcd arithmetic
-AgentStrategy.agda      — Certified L3 proposals from seed indices
-BatchAuction.agda       — tryMatch with decidable crossing; matchZip
-FlagshipFull.agda       — Concrete SimFnL3; pointwise flagship instantiated
-L0AgentStrategy.agda    — Concrete SimFnL0; negative-surplus witness; l0Nonpos-inverted
-Stochastic.agda         — survivalCount; FSDom; l3FSDom-l0-inverted; l3Expected-l0-inverted; l0FSDom-l3-productive
-MultiAgentSim.agda      — k-pair extension; AllInverted/AllProductive; l3FSDom-l0-invertedN; l0FSDom-l3-productiveN; l3ExpectedN-l0-inverted; l0ExpectedN-l3-productive
-EfficiencyFSD.agda      — Efficiency ratio FSD; l3EffFSDom-l0-inverted; l0EffFSDom-l3-productive; expected-efficiency corollaries
-MultiAgentEffFSD.agda   — k-pair efficiency FSD; l3EffFSDom-l0-invertedN; l0EffFSDom-l3-productiveN; expected corollaries
-MixedWelfare.agda       — Oracle-mix welfare; Mixed predicate; mixFSDom-l3; mixFSDom-l0; expected corollaries
-MixedEffFSD.agda        — Oracle-mix efficiency FSD; concreteMixEffN; mixEffFSDom-l3; mixEffFSDom-l0; expected corollaries
-Main.agda               — Executable: runs both environments over all 16 seeds (n=3)
+Agent.agda                    — Agents: roles, valuations, budgets, inventory
+Proposal.agda                 — Raw proposals; L0 and L3 constraint levels
+Seed.agda                     — Oracle tape: Vec (Fin n) k, the random number source
+Institution.agda              — Batch clearing auction; BuyerAdmissible / SellerAdmissible
+Surplus.agda                  — Trade surplus definition; proof that 0 ≤ surplus(m) for L3
+Trace.agda                    — Event log; realizedSurplus; non-negativity theorem
+Efficiency.agda               — Efficiency ratio and its non-negativity
+Flagship.agda                 — L0 witness match (rawSurplus = −1); structural dominance
+Probability.agda              — sumQ; non-negative sums; strict monotonicity
+SimulationModel.agda          — Abstract flagship: Theorems 6 (pointwise) and 7 (expected)
+PriceGrid.agda                — Uniform tick grids; ratio ≤ 1 proved from gcd arithmetic
+AgentStrategy.agda            — Certified L3 proposals from seed indices
+BatchAuction.agda             — tryMatch with decidable crossing; matchZip
+FlagshipFull.agda             — Concrete SimFnL3; pointwise flagship instantiated
+L0AgentStrategy.agda          — Concrete SimFnL0; negative-surplus witness; l0Nonpos-inverted
+Stochastic.agda               — survivalCount; FSDom; l3FSDom-l0-inverted; l3Expected-l0-inverted; l0FSDom-l3-productive
+MultiAgentSim.agda            — k-pair extension; AllInverted/AllProductive; l3FSDom-l0-invertedN; l0FSDom-l3-productiveN; l3ExpectedN-l0-inverted; l0ExpectedN-l3-productive
+EfficiencyFSD.agda            — Efficiency ratio FSD; l3EffFSDom-l0-inverted; l0EffFSDom-l3-productive; expected-efficiency corollaries
+MultiAgentEffFSD.agda         — k-pair efficiency FSD; l3EffFSDom-l0-invertedN; l0EffFSDom-l3-productiveN; expected corollaries
+MixedWelfare.agda             — Oracle-mix welfare; Mixed predicate; mixFSDom-l3; mixFSDom-l0; expected corollaries
+MixedEffFSD.agda              — Oracle-mix efficiency FSD; concreteMixEffN; mixEffFSDom-l3; mixEffFSDom-l0; expected corollaries
+PureStrategyIncomparable.agda — Negative result: l0NotFSDom-l3-mixed; l3NotFSDom-l0-mixed
+Main.agda                     — Executable: runs both environments over all 16 seeds (n=3)
 ```
 
 ---
@@ -243,6 +244,22 @@ This completes the full 3D result table:
 |--|-------------|---------|--------------|
 | Raw surplus FSD | `Stochastic` ✓ | `MultiAgentSim` ✓ | `MixedWelfare` ✓ |
 | Efficiency FSD | `EfficiencyFSD` ✓ | `MultiAgentEffFSD` ✓ | `MixedEffFSD` ✓ |
+
+### Theorem (Pure Strategy Incomparability — Mixed Markets)
+
+In any mixed market, neither pure strategy FSD-dominates the other. Specifically:
+
+$$\lnot\ \text{FSDom}\bigl(\text{l0RealizedSurplusN},\ \text{realizedSurplusN},\ [\mathbf{s}_1]\bigr) \qquad \text{given } \text{L0}(\mathbf{s}_1) < 0$$
+
+$$\lnot\ \text{FSDom}\bigl(\text{realizedSurplusN},\ \text{l0RealizedSurplusN},\ [\mathbf{s}_2]\bigr) \qquad \text{given } \text{L3}(\mathbf{s}_2) < \text{L0}(\mathbf{s}_2)$$
+
+Both hypotheses are satisfiable simultaneously in any market with at least one inverted pair (where L0 can go negative) and at least one productive pair (where L3 is strictly worse than L0).
+
+*Proof (l0NotFSDom-l3-mixed):* At threshold $t = 0$: $\text{survivalCount}(\text{L3}, [\mathbf{s}_1], 0) = 1$ (since L3 $\geq 0$ always, from `realizedSurplusN-nonNeg`) but $\text{survivalCount}(\text{L0}, [\mathbf{s}_1], 0) = 0$ (since L0($\mathbf{s}_1$) $< 0$). FSDom would require $1 \leq 0$ in $\mathbb{N}$ — absurd.
+
+*Proof (l3NotFSDom-l0-mixed):* At threshold $t = \text{L0}(\mathbf{s}_2)$: $\text{survivalCount}(\text{L0}, [\mathbf{s}_2], t) = 1$ (L0 $\geq t$ by $\leq$-refl) but $\text{survivalCount}(\text{L3}, [\mathbf{s}_2], t) = 0$ (L3($\mathbf{s}_2$) $< t$). FSDom would require $1 \leq 0$ — absurd.
+
+*Economic interpretation:* There is no uniformly best pure strategy in mixed markets. The oracle mix from Modules 21–22 is needed to dominate both. This negative result completes the picture: the 3D table shows what *is* true (oracle mix dominates everything), and `PureStrategyIncomparable` shows what is *not* true (pure strategies don't dominate each other).
 
 ---
 
